@@ -28,6 +28,7 @@ Processing of `.aiff` files in Rust.
             * 4 bytes: Chunk size
             * Variable: Text data (file name)
         * COMM chunk:
+            * Communication and metadata
             * 4 bytes: "COMM" identifier
             * 4 bytes: Chunk size (18 for standard AIFF)
             * 2 bytes: Number of channels
@@ -35,9 +36,11 @@ Processing of `.aiff` files in Rust.
             * 2 bytes: Sample size (bits per sample)
             * 10 bytes: Sample rate (80-bit IEEE 754 extended floating-point)
         * SSND chunk:
+            * The sound chunk
             * 4 bytes: "SSND" identifier
             * 4 bytes: Chunk size
             * 4 bytes: Offset
+                * The offest from the start of the sound data to the beginning of first sound sample
             * 4 bytes: Block size
             * Remaining: Audio data
 * Spotify API features:

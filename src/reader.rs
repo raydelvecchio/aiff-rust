@@ -9,15 +9,17 @@ pub struct AiffData {
     pub sample_size: i16,
     pub sample_rate: f64,
     pub track_name: String,
-    pub track_length: u32
+    pub track_length: u32,
+    pub sound_offset: u32,
+    pub sound_block_size: u32
 }
 
 pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>> {
     /* Reads the .aiff file and prints key information about it. */
-    let mut file = File::open(filepath)?;  // opens the file at the filepath
+    let mut file = File::open(filepath)?;  // opens the file at the filepath, the ? instantly propogates the result or error to the current scope (so we don't have to manually handle Ok and Err with a match)
 
     let mut form_chunk = [0u8; 4];  // first 4 bytes are the FORM chunk
-    file.read_exact(&mut form_chunk)?;
+    file.read_exact(&mut form_chunk)?;  // reads from the file the amount of bytes to fill up buf (in this case, it's an array of four u8 zeros declared a line above)
     if &form_chunk != b"FORM" {
         return Err("Not a valid AIFF file".into());
     }
@@ -50,8 +52,8 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
         return Err("COMM chunk not found".into());
     }
 
-    let comm_size = file.read_u32::<BigEndian>()?;  // after the COMM chunk, verify that the size is 18 (by reading next 4 bytes) 
-    if comm_size != 18 {
+    let comm_chunk_size = file.read_u32::<BigEndian>()?;  // after the COMM chunk, verify that the size is 18 (by reading next 4 bytes) 
+    if comm_chunk_size != 18 {
         return Err("Unexpected COMM chunk size".into());
     }
 
@@ -59,10 +61,29 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     let num_sample_frames = file.read_u32::<BigEndian>()?;  // 4 bytes for number of frames
     let sample_size = file.read_i16::<BigEndian>()?;  // 2 bytes for bit depth
     let sample_rate = read_extended_float(&mut file)?;  // 10 bytes for sample rate
-
     let track_length = num_sample_frames / sample_rate as u32;
 
-    Ok(AiffData { file_size: file_size, num_channels: num_channels, num_sample_frames: num_sample_frames, sample_size: sample_size, sample_rate: sample_rate, track_name: file_name, track_length: track_length })
+    let mut ssnd_chunk = [0u8; 4];
+    file.read_exact(&mut ssnd_chunk)?;
+    if &ssnd_chunk != b"SSND" {
+        return Err("SSND chunk not found".into());
+    }
+
+    let _ssnd_chunk_size = file.read_u32::<BigEndian>()?;
+    let ssnd_offset = file.read_u32::<BigEndian>()?;
+    let ssnd_block_size = file.read_u32::<BigEndian>()?;
+
+    Ok(AiffData {
+        file_size,
+        num_channels,
+        num_sample_frames,
+        sample_size,
+        sample_rate,
+        track_name: file_name,
+        track_length,
+        sound_offset: ssnd_offset,
+        sound_block_size: ssnd_block_size,
+    })
 }
 
 fn read_extended_float(file: &mut File) -> Result<f64, Box<dyn std::error::Error>> {
