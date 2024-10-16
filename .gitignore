@@ -5,3 +5,6 @@ Cargo.lock
 .DS_Store
 *.profraw
 *.local.toml
+*.aiff
+*.mp3
+samples
