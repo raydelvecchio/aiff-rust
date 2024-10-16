@@ -21,6 +21,7 @@ Processing of `.aiff` files in Rust.
     * Structure
         * First 4 bytes: the `FORM` chunk
         * Next 4 bytes: File size (in bytes, big-endian)
+            * *big-endian*: most significant byte is stored **FIRST**
         * Next 4 bytes: AIFF identifier ("AIFF")
         * NAME chunk (optional):
             * 4 bytes: "NAME" identifier
