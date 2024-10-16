@@ -1,21 +1,27 @@
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use byteorder::{BigEndian, ReadBytesExt};
+use std::time::Instant;
 
 pub struct AiffData {
-    pub file_size: u32,
+    pub file_size_bytes: u32,
     pub num_channels: i16,
     pub num_sample_frames: u32,
-    pub sample_size: i16,
-    pub sample_rate: f64,
+    pub bit_depth: i16,
+    pub sample_rate_hz: f64,
     pub track_name: String,
-    pub track_length: u32,
-    pub sound_offset: u32,
-    pub sound_block_size: u32
+    pub track_length_s: u32,
+    pub sound_offset_bytes: u32,
+    pub sound_block_size_bytes: u32,
+    pub left_channel_audio: Vec<u8>,
+    pub right_channel_audio: Vec<u8>,
 }
 
 pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>> {
     /* Reads the .aiff file and prints key information about it. */
+
+    let start_time = Instant::now();
+
     let mut file = File::open(filepath)?;  // opens the file at the filepath, the ? instantly propogates the result or error to the current scope (so we don't have to manually handle Ok and Err with a match)
 
     let mut form_chunk = [0u8; 4];  // first 4 bytes are the FORM chunk
@@ -35,13 +41,13 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     }
 
     let mut name_chunk = [0u8; 4];  // 4 bytes after the AIFF identifier is the NAME chunk (which is optional)
-    let mut file_name = String::new();
+    let mut track_name = String::new();
     file.read_exact(&mut name_chunk)?;
     if &name_chunk == b"NAME" {
         let chunk_size = file.read_u32::<BigEndian>()?;
         let mut name_data = vec![0u8; chunk_size as usize];
         file.read_exact(&mut name_data)?;
-        file_name = String::from_utf8_lossy(&name_data).to_string();
+        track_name = String::from_utf8_lossy(&name_data).to_string();
     } else {
         file.seek(SeekFrom::Current(-4))?;  // go back 4 bytes if this isn't the name chunk
     }
@@ -59,9 +65,9 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
 
     let num_channels = file.read_i16::<BigEndian>()?;  // 2 bytes for channel count
     let num_sample_frames = file.read_u32::<BigEndian>()?;  // 4 bytes for number of frames
-    let sample_size = file.read_i16::<BigEndian>()?;  // 2 bytes for bit depth
-    let sample_rate = read_extended_float(&mut file)?;  // 10 bytes for sample rate
-    let track_length = num_sample_frames / sample_rate as u32;
+    let bit_depth = file.read_i16::<BigEndian>()?;  // 2 bytes for bit depth
+    let sample_rate_hz = read_extended_float(&mut file)?;  // 10 bytes for sample rate
+    let track_length_s = num_sample_frames / sample_rate_hz as u32;
 
     let mut ssnd_chunk = [0u8; 4];  // 4 bytes after this is SSND chunk
     file.read_exact(&mut ssnd_chunk)?;
@@ -73,16 +79,48 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     let ssnd_offset = file.read_u32::<BigEndian>()?;  // ssnd offset 4 bytes
     let ssnd_block_size = file.read_u32::<BigEndian>()?;  // block size 4 bytes
 
+    file.seek(SeekFrom::Current(ssnd_offset as i64))?;  // respect the ssnd offset
+
+    let mut audio_data = Vec::new();
+    file.read_to_end(&mut audio_data)?;  // reading all of the audio data into a buffer to the end of the file
+
+    let mut left_channel_audio = Vec::new();
+    let mut right_channel_audio = Vec::new();
+    let bytes_per_sample = bit_depth as usize / 8;
+    if num_channels == 1 {
+        left_channel_audio = audio_data.clone();
+        right_channel_audio = audio_data;
+    } else if num_channels == 2 {
+        for chunk in audio_data.chunks(bytes_per_sample * 2) {  // loop through the stereo audio chunks
+            if chunk.len() == bytes_per_sample * 2 {
+                left_channel_audio.extend_from_slice(&chunk[..bytes_per_sample]);  // first bytes_per_sample in left channel
+                right_channel_audio.extend_from_slice(&chunk[bytes_per_sample..]);  // last bytes_per_sample in right channel
+            }
+        }
+    } else {
+        return Err("Must have either 1 or 2 audio channels".into());
+    }
+
+    if left_channel_audio.len() != right_channel_audio.len() {
+        return Err("Left and right audio channels have unequal length".into());
+    }
+
+    let duration = start_time.elapsed();
+
+    print!("{} processed in {}ms\n", filepath, duration.as_millis());
+
     Ok(AiffData {
-        file_size,
+        file_size_bytes: file_size,
         num_channels,
         num_sample_frames,
-        sample_size,
-        sample_rate,
-        track_name: file_name,
-        track_length,
-        sound_offset: ssnd_offset,
-        sound_block_size: ssnd_block_size,
+        bit_depth,
+        sample_rate_hz,
+        track_name,
+        track_length_s,
+        sound_offset_bytes: ssnd_offset,
+        sound_block_size_bytes: ssnd_block_size,
+        left_channel_audio,
+        right_channel_audio,
     })
 }
 
