@@ -43,6 +43,8 @@ Processing of `.aiff` files in Rust.
                 * The offest from the start of the sound data to the beginning of first sound sample
             * 4 bytes: Block size
             * Remaining: Audio data
+                * Audio data is stored, for each channel (if any) in an interleaved format
+                * Left channel frame 1, right channel frame 1, left channel frame 2, right channel frame 2
 * Spotify API features:
     * Acousticness: Calculated using spectral centroids. Higher values indicate more acoustic sound.
     * Danceability: Derived from zero crossing rate. Reflects rhythm stability and beat strength.

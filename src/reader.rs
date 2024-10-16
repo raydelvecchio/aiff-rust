@@ -63,15 +63,15 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     let sample_rate = read_extended_float(&mut file)?;  // 10 bytes for sample rate
     let track_length = num_sample_frames / sample_rate as u32;
 
-    let mut ssnd_chunk = [0u8; 4];
+    let mut ssnd_chunk = [0u8; 4];  // 4 bytes after this is SSND chunk
     file.read_exact(&mut ssnd_chunk)?;
     if &ssnd_chunk != b"SSND" {
         return Err("SSND chunk not found".into());
     }
 
-    let _ssnd_chunk_size = file.read_u32::<BigEndian>()?;
-    let ssnd_offset = file.read_u32::<BigEndian>()?;
-    let ssnd_block_size = file.read_u32::<BigEndian>()?;
+    let _ssnd_chunk_size = file.read_u32::<BigEndian>()?;  // chunk size 4 bytes
+    let ssnd_offset = file.read_u32::<BigEndian>()?;  // ssnd offset 4 bytes
+    let ssnd_block_size = file.read_u32::<BigEndian>()?;  // block size 4 bytes
 
     Ok(AiffData {
         file_size,
