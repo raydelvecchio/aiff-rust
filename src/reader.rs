@@ -25,7 +25,7 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     }
 
     let mut file_size_bytes = [0u8; 4];  // next 4 bytes are the file size
-    file.read_exact(&mut file_size_bytes)?;
+    file.read_exact(&mut file_size_bytes)?;  // mutable borrow of the variable file_size_bytes, allowing it to be modified in the function (rust allows you to control editing / mutating of variables well like this!)
     let file_size = u32::from_be_bytes(file_size_bytes) + 8;
 
     let mut aiff_id = [0u8; 4];  // 4 bytes after that are the AIFF identifier
