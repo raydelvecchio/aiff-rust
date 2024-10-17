@@ -1,5 +1,6 @@
 mod read;
 mod play;
+mod features;
 
 use read::read_aiff;
 use std::env;

@@ -98,7 +98,7 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
             .collect();
 
         right_channel_audio = left_channel_audio.clone();
-        interleaved_audio = left_channel_audio.iter().flat_map(|&sample| vec![sample, sample]).collect();  // construct a 2-channel interleaving by duplicating each sample (left and right are the same)
+        interleaved_audio = left_channel_audio.iter().flat_map(|&sample| vec![sample,]).collect();  // construct a 2-channel interleaving by duplicating each sample (left and right are the same)
     } else if num_channels == 2 {
         for chunk in audio_data.chunks(bytes_per_sample * 2) {
             if chunk.len() == bytes_per_sample * 2 {
