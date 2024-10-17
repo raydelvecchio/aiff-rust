@@ -3,18 +3,21 @@ use std::io::{Read, Seek, SeekFrom};
 use byteorder::{BigEndian, ReadBytesExt};
 use std::time::Instant;
 
+const MAX_F32_SIZE: f32 = 32768.0;
+
 pub struct AiffData {
     pub file_size_bytes: u32,
-    pub num_channels: i16,
+    pub num_channels: u16,
     pub num_sample_frames: u32,
-    pub bit_depth: i16,
-    pub sample_rate_hz: f64,
+    pub bit_depth: u16,
+    pub sample_rate_hz: u32,
     pub track_name: String,
-    pub track_length_s: u32,
-    pub sound_offset_bytes: u32,
-    pub sound_block_size_bytes: u32,
-    pub left_channel_audio: Vec<u8>,
-    pub right_channel_audio: Vec<u8>,
+    pub track_length_s: u16,
+    pub sound_offset_bytes: u16,
+    pub sound_block_size_bytes: u16,
+    pub left_channel_audio: Vec<f32>,  // all audio data is stored as an f32, where all values are scaled from -1 to 1
+    pub right_channel_audio: Vec<f32>,
+    pub interleaved_audio: Vec<f32>,
 }
 
 pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>> {
@@ -63,11 +66,11 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
         return Err("Unexpected COMM chunk size".into());
     }
 
-    let num_channels = file.read_i16::<BigEndian>()?;  // 2 bytes for channel count
+    let num_channels = file.read_u16::<BigEndian>()?;  // 2 bytes for channel count
     let num_sample_frames = file.read_u32::<BigEndian>()?;  // 4 bytes for number of frames
-    let bit_depth = file.read_i16::<BigEndian>()?;  // 2 bytes for bit depth
-    let sample_rate_hz = read_extended_float(&mut file)?;  // 10 bytes for sample rate
-    let track_length_s = num_sample_frames / sample_rate_hz as u32;
+    let bit_depth = file.read_u16::<BigEndian>()?;  // 2 bytes for bit depth
+    let sample_rate_hz = read_extended_float(&mut file)? as u32;  // 10 bytes for sample rate
+    let track_length_s = (num_sample_frames / sample_rate_hz) as u16;
 
     let mut ssnd_chunk = [0u8; 4];  // 4 bytes after this is SSND chunk
     file.read_exact(&mut ssnd_chunk)?;
@@ -76,8 +79,8 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
     }
 
     let _ssnd_chunk_size = file.read_u32::<BigEndian>()?;  // chunk size 4 bytes
-    let ssnd_offset = file.read_u32::<BigEndian>()?;  // ssnd offset 4 bytes
-    let ssnd_block_size = file.read_u32::<BigEndian>()?;  // block size 4 bytes
+    let ssnd_offset = file.read_u16::<BigEndian>()?;  // ssnd offset 4 bytes
+    let ssnd_block_size = file.read_u16::<BigEndian>()?;  // block size 4 bytes
 
     file.seek(SeekFrom::Current(ssnd_offset as i64))?;  // respect the ssnd offset
 
@@ -86,15 +89,29 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
 
     let mut left_channel_audio = Vec::new();
     let mut right_channel_audio = Vec::new();
+    let mut interleaved_audio = Vec::new();
     let bytes_per_sample = bit_depth as usize / 8;
+
     if num_channels == 1 {
-        left_channel_audio = audio_data.clone();
-        right_channel_audio = audio_data;
+        left_channel_audio = audio_data.chunks(bytes_per_sample)
+            .map(|chunk| (i16::from_be_bytes([chunk[0], chunk[1]]) as f32) / MAX_F32_SIZE)
+            .collect();
+
+        right_channel_audio = left_channel_audio.clone();
+        interleaved_audio = left_channel_audio.clone();
     } else if num_channels == 2 {
-        for chunk in audio_data.chunks(bytes_per_sample * 2) {  // loop through the stereo audio chunks
+        for chunk in audio_data.chunks(bytes_per_sample * 2) {
             if chunk.len() == bytes_per_sample * 2 {
-                left_channel_audio.extend_from_slice(&chunk[..bytes_per_sample]);  // first bytes_per_sample in left channel
-                right_channel_audio.extend_from_slice(&chunk[bytes_per_sample..]);  // last bytes_per_sample in right channel
+                let left_sample_int = i16::from_be_bytes([chunk[0], chunk[1]]);  // first load as an i16
+                let right_sample_int = i16::from_be_bytes([chunk[2], chunk[3]]);
+
+                let left_sample_f32 = (left_sample_int as f32) / MAX_F32_SIZE;  // convert to f32 for better sampling and audio inference
+                let right_sample_f32 = (right_sample_int as f32) / MAX_F32_SIZE;
+
+                left_channel_audio.push(left_sample_f32);
+                right_channel_audio.push(right_sample_f32);
+                interleaved_audio.push(left_sample_f32);
+                interleaved_audio.push(right_sample_f32);
             }
         }
     } else {
@@ -107,7 +124,7 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
 
     let duration = start_time.elapsed();
 
-    print!("{} processed in {}ms\n", filepath, duration.as_millis());
+    print!("{} loaded in {}ms\n", filepath, duration.as_millis());
 
     Ok(AiffData {
         file_size_bytes: file_size,
@@ -121,6 +138,7 @@ pub fn read_aiff(filepath: &str) -> Result<AiffData, Box<dyn std::error::Error>>
         sound_block_size_bytes: ssnd_block_size,
         left_channel_audio,
         right_channel_audio,
+        interleaved_audio,
     })
 }
 

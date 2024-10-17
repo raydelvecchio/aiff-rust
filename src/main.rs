@@ -1,10 +1,13 @@
-mod reader;
-use reader::read_aiff;
+mod read;
+mod play;
+
+use read::read_aiff;
 use std::env;
+use play::play_audio;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let current_dir = env::current_dir().expect("failed to get current directory");
-    let file_path = current_dir.join("samples").join("shiver.aiff").to_string_lossy().into_owned();
+    let file_path = current_dir.join("samples").join("this_shit.aiff").to_string_lossy().into_owned();
 
     let data = read_aiff(&file_path)?;
 
@@ -17,6 +20,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Track Length: {} seconds", data.track_length_s);
     println!("Sound Offset: {} bytes", data.sound_offset_bytes);
     println!("Sound Block Size: {} bytes", data.sound_block_size_bytes);
+
+    print!("Playing {}...", data.track_name);
+    play_audio(&data)?;
 
     Ok(())
 }

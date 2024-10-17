@@ -45,6 +45,8 @@ Processing of `.aiff` files in Rust.
             * Remaining: Audio data
                 * Audio data is stored, for each channel (if any) in an interleaved format
                 * Left channel frame 1, right channel frame 1, left channel frame 2, right channel frame 2
+                * Audio data typically stored using *Pulse Code Modulation (PCM)*, which converts analog signal into digital
+                    * Most commonly, each digital sample is stored as an `i16` type, meaning values can be positive or negative
 * Spotify API features:
     * Acousticness: Calculated using spectral centroids. Higher values indicate more acoustic sound.
     * Danceability: Derived from zero crossing rate. Reflects rhythm stability and beat strength.
@@ -59,6 +61,17 @@ Processing of `.aiff` files in Rust.
     * Mode: Calculated using tonnetz features. Indicates whether the track is in major (1) or minor (0) mode.
     * Time Signature: Estimated using tempogram analysis. Represents the number of beats in each bar.
     * Duration: Calculated from the total number of samples and sample rate. Measured in milliseconds.
+
+# Rust Notes
+* The `&` is used to reference a variable
+* `mut` keyword is used to establish that a variable is mutable
+* Using the `as <DTYPE>`, such as `as f32`, *actually* makes the conversion happen, doesn't just compile time check it like typescript
+* Adding a `?` at the end of a function that returns a `Result` instantly propogates the response to the scope of the function call, whether it be successfully returned or an error
+* The module system:
+    * At the root entrypoint, we must declare modules for all files we want to reference, with `mod read` (if we have a file called `read.rs`, which we do)
+    * Then, we can reference that file throughout the project
+    * For non-root files (everything that isn't `main.rs`), we can reference it with `crate::<MODULE>::<THING>`
+        * The `crate` keyword searches for the module in the root directory, either in `/src` or where `main.rs` is located
 
 # Error Log
 * AIFF identifier contains extended characters and thus is invalid
